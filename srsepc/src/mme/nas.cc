@@ -1493,12 +1493,14 @@ bool nas::pack_esm_information_request(srsran::byte_buffer_t* nas_buffer)
 
 bool nas::pack_attach_accept(srsran::byte_buffer_t* nas_buffer)
 {
-  m_logger.info("Packing Attach Accept");
+  // m_logger.info("Packing Attach Accept");
+  m_logger.info("Packing Attach Reject");
 
-  LIBLTE_MME_ATTACH_ACCEPT_MSG_STRUCT                               attach_accept;
-  LIBLTE_MME_ACTIVATE_DEFAULT_EPS_BEARER_CONTEXT_REQUEST_MSG_STRUCT act_def_eps_bearer_context_req;
+  // LIBLTE_MME_ATTACH_ACCEPT_MSG_STRUCT                               attach_accept;
+  // LIBLTE_MME_ACTIVATE_DEFAULT_EPS_BEARER_CONTEXT_REQUEST_MSG_STRUCT act_def_eps_bearer_context_req;
+  LIBLTE_MME_ATTACH_REJECT_MSG_STRUCT attach_reject;
 
-  // Get decimal MCC and MNC
+  /*// Get decimal MCC and MNC
   uint32_t mcc = 0;
   mcc += 0x000F & m_mcc;
   mcc += 10 * ((0x00F0 & m_mcc) >> 4);
@@ -1514,9 +1516,17 @@ bool nas::pack_attach_accept(srsran::byte_buffer_t* nas_buffer)
     mnc += 0x000F & m_mnc;
     mnc += 10 * ((0x00F0 & m_mnc) >> 4);
     mnc += 100 * ((0x0F00 & m_mnc) >> 8);
-  }
+  }*/
 
-  // Attach accept
+  // Attach reject
+  memset(&attach_reject, 0, sizeof(attach_reject));
+  
+  attach_reject.esm_msg_present = false;
+  attach_reject.t3446_value_present = false;
+  attach_reject.emm_cause = LIBLTE_MME_EMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED_BY_THE_NETWORK;
+
+
+  /*// Attach accept
   attach_accept.eps_attach_result = m_emm_ctx.attach_type;
 
   // TODO: Set t3412 from config
@@ -1611,10 +1621,23 @@ bool nas::pack_attach_accept(srsran::byte_buffer_t* nas_buffer)
   m_sec_ctx.dl_nas_count++;
   liblte_mme_pack_activate_default_eps_bearer_context_request_msg(&act_def_eps_bearer_context_req,
                                                                   &attach_accept.esm_msg);
-  liblte_mme_pack_attach_accept_msg(
-      &attach_accept, sec_hdr_type, m_sec_ctx.dl_nas_count, (LIBLTE_BYTE_MSG_STRUCT*)nas_buffer);
 
-  // Encrypt NAS message
+  // I think we should modify this :-)
+  liblte_mme_pack_attach_accept_msg(
+      &attach_accept, sec_hdr_type, m_sec_ctx.dl_nas_count, (LIBLTE_BYTE_MSG_STRUCT*)nas_buffer);*/
+
+  LIBLTE_ERROR_ENUM err = liblte_mme_pack_attach_reject_msg(
+    &attach_reject, (LIBLTE_BYTE_MSG_STRUCT*)nas_buffer
+  );
+
+  if (err != LIBLTE_SUCCESS) {
+    m_logger.error("Failed to pack Attach Reject");
+    return false;
+  }
+
+  m_logger.info("Packed Attach Reject");
+
+  /*// Encrypt NAS message
   cipher_encrypt(nas_buffer);
 
   // Integrity protect NAS message
@@ -1623,7 +1646,7 @@ bool nas::pack_attach_accept(srsran::byte_buffer_t* nas_buffer)
   memcpy(&nas_buffer->msg[1], mac, 4);
 
   // Log attach accept info
-  m_logger.info("Packed Attach Accept");
+  m_logger.info("Packed Attach Accept");*/
   return true;
 }
 
