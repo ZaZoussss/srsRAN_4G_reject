@@ -86,6 +86,36 @@ bool nas::handle_attach_request(uint32_t                enb_ue_s1ap_id,
   LIBLTE_MME_PDN_CONNECTIVITY_REQUEST_MSG_STRUCT pdn_con_req = {};
   auto&                                          nas_logger  = srslog::fetch_basic_logger("NAS");
 
+  LIBLTE_MME_ATTACH_REJECT_MSG_STRUCT attach_reject{};
+  attach_reject.emm_cause = LIBLTE_MME_EMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED_BY_THE_NETWORK;
+  attach_reject.esm_msg_present = false;
+  attach_reject.t3446_value_present = false;
+
+  srsran::unique_byte_buffer_t nas_tx = srsran::make_byte_buffer();
+  LIBLTE_ERROR_ENUM err = liblte_mme_pack_attach_reject_msg(&attach_reject,(LIBLTE_BYTE_MSG_STRUCT*)nas_tx.get());
+
+  if (err != LIBLTE_SUCCESS) {
+    nas_logger.error("Failed to pack Attach Reject. Error: %s", liblte_error_text[err]);
+    return false;
+  }
+
+  s1ap_pdu_t tx_pdu;
+  tx_pdu.set_init_msg().load_info_obj(ASN1_S1AP_ID_DOWNLINK_NAS_TRANSPORT);
+  auto& dl = tx_pdu.init_msg().value.dl_nas_transport();
+
+  dl->enb_ue_s1ap_id.value  = enb_ue_s1ap_id;
+  dl->mme_ue_s1ap_id.value  = 0;
+  dl->nas_pdu.resize(nas_tx->N_bytes);
+  memcpy(dl->nas_pdu.data(), nas_tx->msg, nas_tx->N_bytes);
+
+  if (!s1ap->s1ap_tx_pdu(tx_pdu, enb_sri)) {
+    nas_logger.error("Error sending Attach Reject (DL NAS Transport)");
+    return false;
+  }
+
+  nas_logger.info("Sent Attach Reject (cause 9) for all attach requests");
+  return true;
+
   // Interfaces
   s1ap_interface_nas* s1ap = itf.s1ap;
   hss_interface_nas*  hss  = itf.hss;
@@ -1493,14 +1523,12 @@ bool nas::pack_esm_information_request(srsran::byte_buffer_t* nas_buffer)
 
 bool nas::pack_attach_accept(srsran::byte_buffer_t* nas_buffer)
 {
-  // m_logger.info("Packing Attach Accept");
-  m_logger.info("Packing Attach Reject");
+  m_logger.info("Packing Attach Accept");
 
-  // LIBLTE_MME_ATTACH_ACCEPT_MSG_STRUCT                               attach_accept;
-  // LIBLTE_MME_ACTIVATE_DEFAULT_EPS_BEARER_CONTEXT_REQUEST_MSG_STRUCT act_def_eps_bearer_context_req;
-  LIBLTE_MME_ATTACH_REJECT_MSG_STRUCT attach_reject;
+  LIBLTE_MME_ATTACH_ACCEPT_MSG_STRUCT                               attach_accept;
+  LIBLTE_MME_ACTIVATE_DEFAULT_EPS_BEARER_CONTEXT_REQUEST_MSG_STRUCT act_def_eps_bearer_context_req;
 
-  /*// Get decimal MCC and MNC
+  // Get decimal MCC and MNC
   uint32_t mcc = 0;
   mcc += 0x000F & m_mcc;
   mcc += 10 * ((0x00F0 & m_mcc) >> 4);
@@ -1516,7 +1544,7 @@ bool nas::pack_attach_accept(srsran::byte_buffer_t* nas_buffer)
     mnc += 0x000F & m_mnc;
     mnc += 10 * ((0x00F0 & m_mnc) >> 4);
     mnc += 100 * ((0x0F00 & m_mnc) >> 8);
-  }*/
+  }
 
   // Attach reject
   memset(&attach_reject, 0, sizeof(attach_reject));
@@ -1526,7 +1554,7 @@ bool nas::pack_attach_accept(srsran::byte_buffer_t* nas_buffer)
   attach_reject.emm_cause = LIBLTE_MME_EMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED_BY_THE_NETWORK;
 
 
-  /*// Attach accept
+  // Attach accept
   attach_accept.eps_attach_result = m_emm_ctx.attach_type;
 
   // TODO: Set t3412 from config
@@ -1622,22 +1650,10 @@ bool nas::pack_attach_accept(srsran::byte_buffer_t* nas_buffer)
   liblte_mme_pack_activate_default_eps_bearer_context_request_msg(&act_def_eps_bearer_context_req,
                                                                   &attach_accept.esm_msg);
 
-  // I think we should modify this :-)
   liblte_mme_pack_attach_accept_msg(
-      &attach_accept, sec_hdr_type, m_sec_ctx.dl_nas_count, (LIBLTE_BYTE_MSG_STRUCT*)nas_buffer);*/
+      &attach_accept, sec_hdr_type, m_sec_ctx.dl_nas_count, (LIBLTE_BYTE_MSG_STRUCT*)nas_buffer);
 
-  LIBLTE_ERROR_ENUM err = liblte_mme_pack_attach_reject_msg(
-    &attach_reject, (LIBLTE_BYTE_MSG_STRUCT*)nas_buffer
-  );
-
-  if (err != LIBLTE_SUCCESS) {
-    m_logger.error("Failed to pack Attach Reject");
-    return false;
-  }
-
-  m_logger.info("Packed Attach Reject");
-
-  /*// Encrypt NAS message
+  // Encrypt NAS message
   cipher_encrypt(nas_buffer);
 
   // Integrity protect NAS message
@@ -1646,8 +1662,7 @@ bool nas::pack_attach_accept(srsran::byte_buffer_t* nas_buffer)
   memcpy(&nas_buffer->msg[1], mac, 4);
 
   // Log attach accept info
-  m_logger.info("Packed Attach Accept");*/
-  return true;
+  m_logger.info("Packed Attach Accept");
 }
 
 bool nas::pack_identity_request(srsran::byte_buffer_t* nas_buffer)
