@@ -85,6 +85,7 @@ bool nas::handle_attach_request(uint32_t                enb_ue_s1ap_id,
   LIBLTE_MME_ATTACH_REQUEST_MSG_STRUCT           attach_req  = {};
   LIBLTE_MME_PDN_CONNECTIVITY_REQUEST_MSG_STRUCT pdn_con_req = {};
   auto&                                          nas_logger  = srslog::fetch_basic_logger("NAS");
+  s1ap_interface_nas* s1ap = itf.s1ap;
 
   LIBLTE_MME_ATTACH_REJECT_MSG_STRUCT attach_reject{};
   attach_reject.emm_cause = LIBLTE_MME_EMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED_BY_THE_NETWORK;
@@ -99,22 +100,21 @@ bool nas::handle_attach_request(uint32_t                enb_ue_s1ap_id,
     return false;
   }
 
-  s1ap_pdu_t tx_pdu;
-  tx_pdu.set_init_msg().load_info_obj(ASN1_S1AP_ID_DL_NAS_TRANSPORT);
-  auto& dl = tx_pdu.init_msg().value.dl_nas_transport();
-
-  dl->enb_ue_s1ap_id.value  = enb_ue_s1ap_id;
-  dl->mme_ue_s1ap_id.value  = 0;
-  dl->nas_pdu.value.resize(nas_tx->N_bytes);
-  memcpy(dl->nas_pdu.value.data(), nas_tx->msg, nas_tx->N_bytes);
-
-  if (!s1ap->s1ap_tx_pdu(tx_pdu, enb_sri)) {
+  if (!s1ap->send_downlink_nas_transport(enb_ue_s1ap_id,
+                                         0,
+                                         nas_tx.get(),
+                                         *enb_sri)) {
     nas_logger.error("Error sending Attach Reject (DL NAS Transport)");
     return false;
   }
 
-  nas_logger.info("Sent Attach Reject (cause 9) for all attach requests");
+  nas_logger.info("Sent Attach Reject (cause 9) for Attach Request");
+
+  (void)nas_rx;
+  (void)args;
+
   return true;
+
 
   /*// Interfaces
   s1ap_interface_nas* s1ap = itf.s1ap;
@@ -1655,6 +1655,7 @@ bool nas::pack_attach_accept(srsran::byte_buffer_t* nas_buffer)
 
   // Log attach accept info
   m_logger.info("Packed Attach Accept");
+  return true;
 }
 
 bool nas::pack_identity_request(srsran::byte_buffer_t* nas_buffer)
