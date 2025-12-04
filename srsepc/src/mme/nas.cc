@@ -100,13 +100,13 @@ bool nas::handle_attach_request(uint32_t                enb_ue_s1ap_id,
   }
 
   s1ap_pdu_t tx_pdu;
-  tx_pdu.set_init_msg().load_info_obj(ASN1_S1AP_ID_DOWNLINK_NAS_TRANSPORT);
+  tx_pdu.set_init_msg().load_info_obj(ASN1_S1AP_ID_DL_NAS_TRANSPORT);
   auto& dl = tx_pdu.init_msg().value.dl_nas_transport();
 
   dl->enb_ue_s1ap_id.value  = enb_ue_s1ap_id;
   dl->mme_ue_s1ap_id.value  = 0;
-  dl->nas_pdu.resize(nas_tx->N_bytes);
-  memcpy(dl->nas_pdu.data(), nas_tx->msg, nas_tx->N_bytes);
+  dl->nas_pdu.value.resize(nas_tx->N_bytes);
+  memcpy(dl->nas_pdu.value.data(), nas_tx->msg, nas_tx->N_bytes);
 
   if (!s1ap->s1ap_tx_pdu(tx_pdu, enb_sri)) {
     nas_logger.error("Error sending Attach Reject (DL NAS Transport)");
@@ -116,7 +116,7 @@ bool nas::handle_attach_request(uint32_t                enb_ue_s1ap_id,
   nas_logger.info("Sent Attach Reject (cause 9) for all attach requests");
   return true;
 
-  // Interfaces
+  /*// Interfaces
   s1ap_interface_nas* s1ap = itf.s1ap;
   hss_interface_nas*  hss  = itf.hss;
   gtpc_interface_nas* gtpc = itf.gtpc;
@@ -127,7 +127,7 @@ bool nas::handle_attach_request(uint32_t                enb_ue_s1ap_id,
     nas_logger.error("Error unpacking NAS attach request. Error: %s", liblte_error_text[err]);
     return false;
   }
-  // Get PDN Connectivity Request*/
+  // Get PDN Connectivity Request
   err = liblte_mme_unpack_pdn_connectivity_request_msg(&attach_req.esm_msg, &pdn_con_req);
   if (err != LIBLTE_SUCCESS) {
     nas_logger.error("Error unpacking NAS PDN Connectivity Request. Error: %s", liblte_error_text[err]);
@@ -229,7 +229,7 @@ bool nas::handle_attach_request(uint32_t                enb_ue_s1ap_id,
       return false;
     }
   }
-  return true;
+  return true;*/
 }
 
 bool nas::handle_imsi_attach_request_unknown_ue(uint32_t                                              enb_ue_s1ap_id,
@@ -1545,14 +1545,6 @@ bool nas::pack_attach_accept(srsran::byte_buffer_t* nas_buffer)
     mnc += 10 * ((0x00F0 & m_mnc) >> 4);
     mnc += 100 * ((0x0F00 & m_mnc) >> 8);
   }
-
-  // Attach reject
-  memset(&attach_reject, 0, sizeof(attach_reject));
-  
-  attach_reject.esm_msg_present = false;
-  attach_reject.t3446_value_present = false;
-  attach_reject.emm_cause = LIBLTE_MME_EMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED_BY_THE_NETWORK;
-
 
   // Attach accept
   attach_accept.eps_attach_result = m_emm_ctx.attach_type;
