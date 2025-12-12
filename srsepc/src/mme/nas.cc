@@ -296,40 +296,66 @@ bool nas::handle_imsi_attach_request_unknown_ue(uint32_t                        
   // Save attach request type
   nas_ctx->m_emm_ctx.attach_type = attach_req.eps_attach_type;
 
-  // Get Authentication Vectors from HSS
-  if (!hss->gen_auth_info_answer(nas_ctx->m_emm_ctx.imsi,
-                                 nas_ctx->m_sec_ctx.k_asme,
-                                 nas_ctx->m_sec_ctx.autn,
-                                 nas_ctx->m_sec_ctx.rand,
-                                 nas_ctx->m_sec_ctx.xres)) {
-    srsran::console("User not found. IMSI %015" PRIu64 "\n", nas_ctx->m_emm_ctx.imsi);
-    nas_logger.info("User not found. IMSI %015" PRIu64 "", nas_ctx->m_emm_ctx.imsi);
-    return false;
-  }
+  // // Get Authentication Vectors from HSS
+  // if (!hss->gen_auth_info_answer(nas_ctx->m_emm_ctx.imsi,
+  //                                nas_ctx->m_sec_ctx.k_asme,
+  //                                nas_ctx->m_sec_ctx.autn,
+  //                                nas_ctx->m_sec_ctx.rand,
+  //                                nas_ctx->m_sec_ctx.xres)) {
+  //   srsran::console("User not found. IMSI %015" PRIu64 "\n", nas_ctx->m_emm_ctx.imsi);
+  //   nas_logger.info("User not found. IMSI %015" PRIu64 "", nas_ctx->m_emm_ctx.imsi);
+  //   return false;
+  // }
 
   // Allocate eKSI for this authentication vector
   // Here we assume a new security context thus a new eKSI
-  nas_ctx->m_sec_ctx.eksi = 0;
+  // nas_ctx->m_sec_ctx.eksi = 0;
 
   // Save the UE context
   s1ap->add_nas_ctx_to_imsi_map(nas_ctx);
   s1ap->add_nas_ctx_to_mme_ue_s1ap_id_map(nas_ctx);
   s1ap->add_ue_to_enb_set(enb_sri->sinfo_assoc_id, nas_ctx->m_ecm_ctx.mme_ue_s1ap_id);
 
-  // Pack NAS Authentication Request in Downlink NAS Transport msg
+  // // Pack NAS Authentication Request in Downlink NAS Transport msg
+  // nas_tx = srsran::make_byte_buffer();
+  // if (nas_tx == nullptr) {
+  //   nas_logger.error("Couldn't allocate PDU in %s().", __FUNCTION__);
+  //   return false;
+  // }
+  // nas_ctx->pack_authentication_request(nas_tx.get());
+
+  // // Send reply to eNB
+  // s1ap->send_downlink_nas_transport(
+  //     nas_ctx->m_ecm_ctx.enb_ue_s1ap_id, nas_ctx->m_ecm_ctx.mme_ue_s1ap_id, nas_tx.get(), nas_ctx->m_ecm_ctx.enb_sri);
+
+  // nas_logger.info("Downlink NAS: Sending Authentication Request");
+  // srsran::console("Downlink NAS: Sending Authentication Request\n");
+
+  // send reject msg
   nas_tx = srsran::make_byte_buffer();
-  if (nas_tx == nullptr) {
-    nas_logger.error("Couldn't allocate PDU in %s().", __FUNCTION__);
+
+  LIBLTE_MME_ATTACH_REJECT_MSG_STRUCT attach_reject{};
+  attach_reject.emm_cause           = LIBLTE_MME_EMM_CAUSE_ILLEGAL_ME;
+  attach_reject.esm_msg_present     = false;
+  attach_reject.t3446_value_present = false;
+
+  nas_logger.info("Rejecting Attach Request...");
+  LIBLTE_ERROR_ENUM err =
+      liblte_mme_pack_attach_reject_msg(&attach_reject,
+                                        (LIBLTE_BYTE_MSG_STRUCT*)nas_tx.get());
+
+  if (err != LIBLTE_SUCCESS) {
+    nas_logger.error("Failed to pack Attach Reject. Error: %s", liblte_error_text[err]);
     return false;
   }
-  nas_ctx->pack_authentication_request(nas_tx.get());
 
-  // Send reply to eNB
   s1ap->send_downlink_nas_transport(
-      nas_ctx->m_ecm_ctx.enb_ue_s1ap_id, nas_ctx->m_ecm_ctx.mme_ue_s1ap_id, nas_tx.get(), nas_ctx->m_ecm_ctx.enb_sri);
+      nas_ctx->m_ecm_ctx.enb_ue_s1ap_id,
+      nas_ctx->m_ecm_ctx.mme_ue_s1ap_id,
+      nas_tx.get(),
+      nas_ctx->m_ecm_ctx.enb_sri);
 
-  nas_logger.info("Downlink NAS: Sending Authentication Request");
-  srsran::console("Downlink NAS: Sending Authentication Request\n");
+  s1ap->send_ue_context_release_command(nas_ctx->m_ecm_ctx.mme_ue_s1ap_id);
   return true;
 }
 
