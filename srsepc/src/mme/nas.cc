@@ -87,36 +87,38 @@ bool nas::handle_attach_request(uint32_t                enb_ue_s1ap_id,
   auto&                                          nas_logger  = srslog::fetch_basic_logger("NAS");
   s1ap_interface_nas* s1ap = itf.s1ap;
 
-  LIBLTE_MME_ATTACH_REJECT_MSG_STRUCT attach_reject{};
-  attach_reject.emm_cause = LIBLTE_MME_EMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED_BY_THE_NETWORK;
-  attach_reject.esm_msg_present = false;
-  attach_reject.t3446_value_present = false;
+  // LIBLTE_MME_ATTACH_REJECT_MSG_STRUCT attach_reject{};
+  // attach_reject.emm_cause = LIBLTE_MME_EMM_CAUSE_ILLEGAL_ME;
+  // attach_reject.esm_msg_present = false;
+  // attach_reject.t3446_value_present = false;
 
-  srsran::unique_byte_buffer_t nas_tx = srsran::make_byte_buffer();
-  LIBLTE_ERROR_ENUM err = liblte_mme_pack_attach_reject_msg(&attach_reject,(LIBLTE_BYTE_MSG_STRUCT*)nas_tx.get());
+  // srsran::unique_byte_buffer_t nas_tx = srsran::make_byte_buffer();
+  // LIBLTE_ERROR_ENUM err = liblte_mme_pack_attach_reject_msg(&attach_reject,(LIBLTE_BYTE_MSG_STRUCT*)nas_tx.get());
 
-  if (err != LIBLTE_SUCCESS) {
-    nas_logger.error("Failed to pack Attach Reject. Error: %s", liblte_error_text[err]);
-    return false;
-  }
+  // if (err != LIBLTE_SUCCESS) {
+  //   nas_logger.error("Failed to pack Attach Reject. Error: %s", liblte_error_text[err]);
+  //   return false;
+  // }
 
-  if (!s1ap->send_downlink_nas_transport(enb_ue_s1ap_id,
-                                         0,
-                                         nas_tx.get(),
-                                         *enb_sri)) {
-    nas_logger.error("Error sending Attach Reject (DL NAS Transport)");
-    return false;
-  }
+  // if (!s1ap->send_downlink_nas_transport(enb_ue_s1ap_id,
+  //                                        0,
+  //                                        nas_tx.get(),
+  //                                        *enb_sri)) {
+  //   nas_logger.error("Error sending Attach Reject (DL NAS Transport)");
+  //   return false;
+  // }
 
-  nas_logger.info("Sent Attach Reject (cause 9) for Attach Request");
+  // nas_logger.info("Sent Attach Reject (cause 6) for Attach Request");
 
-  (void)nas_rx;
-  (void)args;
+  // (void)nas_rx;
+  // (void)args;
 
-  return true;
+  // uint32_t mme_ue_s1ap_id = s1ap->get_next_mme_ue_s1ap_id();
+  // s1ap->send_ue_context_release_command(mme_ue_s1ap_id);
+  // return true;
 
 
-  /*// Interfaces
+  // Interfaces
   s1ap_interface_nas* s1ap = itf.s1ap;
   hss_interface_nas*  hss  = itf.hss;
   gtpc_interface_nas* gtpc = itf.gtpc;
@@ -229,7 +231,7 @@ bool nas::handle_attach_request(uint32_t                enb_ue_s1ap_id,
       return false;
     }
   }
-  return true;*/
+  return true;
 }
 
 bool nas::handle_imsi_attach_request_unknown_ue(uint32_t                                              enb_ue_s1ap_id,
@@ -424,20 +426,45 @@ bool nas::handle_guti_attach_request_unknown_ue(uint32_t                        
     nas_ctx->m_esm_ctx[i].erab_id = i;
   }
 
-  // Store temporary ue context
-  s1ap->add_nas_ctx_to_mme_ue_s1ap_id_map(nas_ctx);
-  s1ap->add_ue_to_enb_set(enb_sri->sinfo_assoc_id, nas_ctx->m_ecm_ctx.mme_ue_s1ap_id);
+  // // Store temporary ue context
+  // s1ap->add_nas_ctx_to_mme_ue_s1ap_id_map(nas_ctx);
+  // s1ap->add_ue_to_enb_set(enb_sri->sinfo_assoc_id, nas_ctx->m_ecm_ctx.mme_ue_s1ap_id);
 
-  // Send Identity Request
-  nas_tx = srsran::make_byte_buffer();
-  if (nas_tx == nullptr) {
-    srslog::fetch_basic_logger("NAS").error("Couldn't allocate PDU in %s().", __FUNCTION__);
+  // // Send Identity Request
+  // nas_tx = srsran::make_byte_buffer();
+  // if (nas_tx == nullptr) {
+  //   srslog::fetch_basic_logger("NAS").error("Couldn't allocate PDU in %s().", __FUNCTION__);
+  //   return false;
+  // }
+  // nas_ctx->pack_identity_request(nas_tx.get());
+  // s1ap->send_downlink_nas_transport(
+  //     nas_ctx->m_ecm_ctx.enb_ue_s1ap_id, nas_ctx->m_ecm_ctx.mme_ue_s1ap_id, nas_tx.get(), nas_ctx->m_ecm_ctx.enb_sri);
+  
+  // send reject msg
+  srsran::unique_byte_buffer_t nas_tx = srsran::make_byte_buffer();
+  auto&                                          nas_logger  = srslog::fetch_basic_logger("NAS");
+
+  LIBLTE_MME_ATTACH_REJECT_MSG_STRUCT attach_reject{};
+  attach_reject.emm_cause           = LIBLTE_MME_EMM_CAUSE_ILLEGAL_ME;
+  attach_reject.esm_msg_present     = false;
+  attach_reject.t3446_value_present = false;
+
+  nas_logger.info("Rejecting Attach Request...");
+  LIBLTE_ERROR_ENUM err =
+      liblte_mme_pack_attach_reject_msg(&attach_reject,
+                                        (LIBLTE_BYTE_MSG_STRUCT*)nas_tx.get());
+
+  if (err != LIBLTE_SUCCESS) {
+    nas_logger.error("Failed to pack Attach Reject. Error: %s", liblte_error_text[err]);
     return false;
-  }
-  nas_ctx->pack_identity_request(nas_tx.get());
-  s1ap->send_downlink_nas_transport(
-      nas_ctx->m_ecm_ctx.enb_ue_s1ap_id, nas_ctx->m_ecm_ctx.mme_ue_s1ap_id, nas_tx.get(), nas_ctx->m_ecm_ctx.enb_sri);
 
+  s1ap->send_downlink_nas_transport(
+      nas_ctx->m_ecm_ctx.enb_ue_s1ap_id,
+      nas_ctx->m_ecm_ctx.mme_ue_s1ap_id,
+      nas_tx.get(),
+      nas_ctx->m_ecm_ctx.enb_sri);
+
+  s1ap->send_ue_context_release_command(nas_ctx->m_ecm_ctx.mme_ue_s1ap_id);
   return true;
 }
 
