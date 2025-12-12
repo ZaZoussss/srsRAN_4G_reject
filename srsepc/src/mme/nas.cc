@@ -85,7 +85,6 @@ bool nas::handle_attach_request(uint32_t                enb_ue_s1ap_id,
   LIBLTE_MME_ATTACH_REQUEST_MSG_STRUCT           attach_req  = {};
   LIBLTE_MME_PDN_CONNECTIVITY_REQUEST_MSG_STRUCT pdn_con_req = {};
   auto&                                          nas_logger  = srslog::fetch_basic_logger("NAS");
-  s1ap_interface_nas* s1ap = itf.s1ap;
 
   // LIBLTE_MME_ATTACH_REJECT_MSG_STRUCT attach_reject{};
   // attach_reject.emm_cause = LIBLTE_MME_EMM_CAUSE_ILLEGAL_ME;
@@ -441,7 +440,7 @@ bool nas::handle_guti_attach_request_unknown_ue(uint32_t                        
   //     nas_ctx->m_ecm_ctx.enb_ue_s1ap_id, nas_ctx->m_ecm_ctx.mme_ue_s1ap_id, nas_tx.get(), nas_ctx->m_ecm_ctx.enb_sri);
   
   // send reject msg
-  srsran::unique_byte_buffer_t nas_tx = srsran::make_byte_buffer();
+  nas_tx = srsran::make_byte_buffer();
   auto&                                          nas_logger  = srslog::fetch_basic_logger("NAS");
 
   LIBLTE_MME_ATTACH_REJECT_MSG_STRUCT attach_reject{};
@@ -457,6 +456,7 @@ bool nas::handle_guti_attach_request_unknown_ue(uint32_t                        
   if (err != LIBLTE_SUCCESS) {
     nas_logger.error("Failed to pack Attach Reject. Error: %s", liblte_error_text[err]);
     return false;
+  }
 
   s1ap->send_downlink_nas_transport(
       nas_ctx->m_ecm_ctx.enb_ue_s1ap_id,
