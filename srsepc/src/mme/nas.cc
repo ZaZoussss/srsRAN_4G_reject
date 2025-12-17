@@ -332,6 +332,8 @@ bool nas::handle_imsi_attach_request_unknown_ue(uint32_t                        
   // srsran::console("Downlink NAS: Sending Authentication Request\n");
 
   // send reject msg
+  nas_ctx->m_ecm_ctx.state = ECM_STATE_CONNECTED;
+
   nas_tx = srsran::make_byte_buffer();
 
   LIBLTE_MME_ATTACH_REJECT_MSG_STRUCT attach_reject{};
@@ -356,7 +358,7 @@ bool nas::handle_imsi_attach_request_unknown_ue(uint32_t                        
       nas_ctx->m_ecm_ctx.enb_sri);
 
   s1ap->send_ue_context_release_command(nas_ctx->m_ecm_ctx.mme_ue_s1ap_id);
-  return true;
+  return false;
 }
 
 bool nas::handle_imsi_attach_request_known_ue(nas*                                                  nas_ctx,
