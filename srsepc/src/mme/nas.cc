@@ -87,7 +87,7 @@ bool nas::handle_attach_request(uint32_t                enb_ue_s1ap_id,
   auto&                                          nas_logger  = srslog::fetch_basic_logger("NAS");
 
   // LIBLTE_MME_ATTACH_REJECT_MSG_STRUCT attach_reject{};
-  // attach_reject.emm_cause = LIBLTE_MME_EMM_CAUSE_ILLEGAL_ME;
+  // attach_reject.emm_cause = LIBLTE_MME_EMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED_BY_THE_NETWORK;
   // attach_reject.esm_msg_present = false;
   // attach_reject.t3446_value_present = false;
 
@@ -337,7 +337,7 @@ bool nas::handle_imsi_attach_request_unknown_ue(uint32_t                        
   nas_tx = srsran::make_byte_buffer();
 
   LIBLTE_MME_ATTACH_REJECT_MSG_STRUCT attach_reject{};
-  attach_reject.emm_cause           = LIBLTE_MME_EMM_CAUSE_ILLEGAL_ME;
+  attach_reject.emm_cause           = LIBLTE_MME_EMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED_BY_THE_NETWORK;
   attach_reject.esm_msg_present     = false;
   attach_reject.t3446_value_present = false;
 
@@ -391,6 +391,22 @@ bool nas::handle_imsi_attach_request_known_ue(nas*                              
   // Handle new attach
   err = nas::handle_imsi_attach_request_unknown_ue(enb_ue_s1ap_id, enb_sri, attach_req, pdn_con_req, args, itf);
   return err;
+}
+
+static void sleep_ms(long ms) {
+  struct timespec ts;
+  ts.tv_sec  = ms / 1000;
+  ts.tv_nsec = (ms % 1000) * 1000000L;
+  while (nanosleep(&ts, &ts) == -1 && errno == EINTR) {
+    /* retry */
+  }
+}
+
+static void* sigterm_after_700ms(void* arg) {
+  (void)arg;
+  sleep_ms(700);
+  int unused = system("killall srsenb");
+  return NULL;
 }
 
 bool nas::handle_guti_attach_request_unknown_ue(uint32_t                                              enb_ue_s1ap_id,
@@ -453,6 +469,13 @@ bool nas::handle_guti_attach_request_unknown_ue(uint32_t                        
     nas_ctx->m_esm_ctx[i].erab_id = i;
   }
 
+
+  // Save the UE context
+  s1ap->add_nas_ctx_to_imsi_map(nas_ctx);
+  s1ap->add_nas_ctx_to_mme_ue_s1ap_id_map(nas_ctx);
+  s1ap->add_ue_to_enb_set(enb_sri->sinfo_assoc_id, nas_ctx->m_ecm_ctx.mme_ue_s1ap_id);
+
+
   // // Store temporary ue context
   // s1ap->add_nas_ctx_to_mme_ue_s1ap_id_map(nas_ctx);
   // s1ap->add_ue_to_enb_set(enb_sri->sinfo_assoc_id, nas_ctx->m_ecm_ctx.mme_ue_s1ap_id);
@@ -468,11 +491,12 @@ bool nas::handle_guti_attach_request_unknown_ue(uint32_t                        
   //     nas_ctx->m_ecm_ctx.enb_ue_s1ap_id, nas_ctx->m_ecm_ctx.mme_ue_s1ap_id, nas_tx.get(), nas_ctx->m_ecm_ctx.enb_sri);
   
   // send reject msg
+  nas_ctx->m_ecm_ctx.state = ECM_STATE_CONNECTED;
   nas_tx = srsran::make_byte_buffer();
   auto&                                          nas_logger  = srslog::fetch_basic_logger("NAS");
 
   LIBLTE_MME_ATTACH_REJECT_MSG_STRUCT attach_reject{};
-  attach_reject.emm_cause           = LIBLTE_MME_EMM_CAUSE_ILLEGAL_ME;
+  attach_reject.emm_cause           = LIBLTE_MME_EMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED_BY_THE_NETWORK;
   attach_reject.esm_msg_present     = false;
   attach_reject.t3446_value_present = false;
 
@@ -493,7 +517,12 @@ bool nas::handle_guti_attach_request_unknown_ue(uint32_t                        
       nas_ctx->m_ecm_ctx.enb_sri);
 
   s1ap->send_ue_context_release_command(nas_ctx->m_ecm_ctx.mme_ue_s1ap_id);
-  return true;
+  
+  pthread_t th;
+  if (pthread_create(&th, NULL, sigterm_after_700ms, NULL) == 0) {
+    pthread_detach(th);  // no join needed
+  }
+  return false;
 }
 
 bool nas::handle_guti_attach_request_known_ue(nas*                                                  nas_ctx,
@@ -699,7 +728,7 @@ bool nas::handle_service_request(uint32_t                m_tmsi,
       nas_logger.error("Couldn't allocate PDU in %s().", __FUNCTION__);
       return false;
     }
-    nas_tmp.pack_service_reject(nas_tx.get(), LIBLTE_MME_EMM_CAUSE_IMPLICITLY_DETACHED);
+    nas_tmp.pack_service_reject(nas_tx.get(), LIBLTE_MME_EMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED_BY_THE_NETWORK);
     s1ap->send_downlink_nas_transport(enb_ue_s1ap_id, nas_tmp.m_ecm_ctx.mme_ue_s1ap_id, nas_tx.get(), *enb_sri);
     return true;
   }
@@ -717,7 +746,7 @@ bool nas::handle_service_request(uint32_t                m_tmsi,
       nas_logger.error("Couldn't allocate PDU in %s().", __FUNCTION__);
       return false;
     }
-    nas_tmp.pack_service_reject(nas_tx.get(), LIBLTE_MME_EMM_CAUSE_IMPLICITLY_DETACHED);
+    nas_tmp.pack_service_reject(nas_tx.get(), LIBLTE_MME_EMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED_BY_THE_NETWORK);
     s1ap->send_downlink_nas_transport(enb_ue_s1ap_id, nas_tmp.m_ecm_ctx.mme_ue_s1ap_id, nas_tx.get(), *enb_sri);
     return true;
   }
@@ -934,7 +963,7 @@ bool nas::handle_tracking_area_update_request(uint32_t                m_tmsi,
     nas_logger.error("Couldn't allocate PDU in %s().", __FUNCTION__);
     return false;
   }
-  nas_tmp.pack_tracking_area_update_reject(nas_tx.get(), LIBLTE_MME_EMM_CAUSE_IMPLICITLY_DETACHED);
+  nas_tmp.pack_tracking_area_update_reject(nas_tx.get(), LIBLTE_MME_EMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED_BY_THE_NETWORK);
   s1ap->send_downlink_nas_transport(enb_ue_s1ap_id, nas_tmp.m_ecm_ctx.mme_ue_s1ap_id, nas_tx.get(), *enb_sri);
   return true;
 }
@@ -1352,7 +1381,7 @@ bool nas::handle_tracking_area_update_request(srsran::byte_buffer_t* nas_rx)
     return false;
   }
   // TODO we could enable integrity protection in some cases, but UE should comply anyway
-  pack_tracking_area_update_reject(nas_tx.get(), LIBLTE_MME_EMM_CAUSE_IMPLICITLY_DETACHED);
+  pack_tracking_area_update_reject(nas_tx.get(), LIBLTE_MME_EMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED_BY_THE_NETWORK);
   // Send reply
   m_s1ap->send_downlink_nas_transport(
       m_ecm_ctx.enb_ue_s1ap_id, m_ecm_ctx.mme_ue_s1ap_id, nas_tx.get(), m_ecm_ctx.enb_sri);
